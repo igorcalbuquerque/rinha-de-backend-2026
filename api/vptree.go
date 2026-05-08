@@ -1,11 +1,7 @@
 package main
 
 import (
-	"container/heap"
 	"math"
-	"math/rand"
-	"sort"
-	"sync"
 )
 
 const (
@@ -13,8 +9,6 @@ const (
 	leafSize = 32
 )
 
-// quantize maps a float64 in [-1, 1] to uint16.
-// -1.0 sentinel maps to 0; [0.0, 1.0] maps to [1, 65535].
 func quantize(v float64) uint16 {
 	if v < -0.5 {
 		return 0
@@ -31,38 +25,13 @@ func quantize(v float64) uint16 {
 
 const dequantScale = float32(1.0 / 65534.0)
 
-func dequantize(q uint16) float32 {
-	if q == 0 {
-		return -1.0
-	}
-	return float32(q-1) * dequantScale
-}
-
-var heapPool = sync.Pool{
-	New: func() interface{} {
-		h := make(maxHeap, 0, 6)
-		return &h
-	},
-}
-
-// sqDistQQ returns the squared Euclidean distance between two quantized vectors.
 func sqDistQQ(a, b [dims]uint16) float32 {
 	var sum float32
 	for i := 0; i < dims; i++ {
-		d := dequantize(a[i]) - dequantize(b[i])
+		d := float32(int32(a[i]) - int32(b[i]))
 		sum += d * d
 	}
 	return sum
-}
-
-// distQF returns the Euclidean distance between a quantized stored vector and a float32 query.
-func distQF(stored [dims]uint16, query [dims]float32) float32 {
-	var sum float32
-	for i := 0; i < dims; i++ {
-		d := dequantize(stored[i]) - query[i]
-		sum += d * d
-	}
-	return float32(math.Sqrt(float64(sum)))
 }
 
 type Point struct {
@@ -126,7 +95,7 @@ func (t *VPTree) buildNode(lo, hi int, tmp []distIndex) int32 {
 		return nodeIdx
 	}
 
-	vpOff := lo + rand.Intn(hi-lo)
+	vpOff := lo + (hi-lo)/2
 	t.idx[lo], t.idx[vpOff] = t.idx[vpOff], t.idx[lo]
 	vp := t.points[t.idx[lo]].Vec
 
@@ -139,14 +108,10 @@ func (t *VPTree) buildNode(lo, hi int, tmp []distIndex) int32 {
 		}
 	}
 
-	sort.Slice(tmp[:inner], func(a, b int) bool {
-		return tmp[a].dist < tmp[b].dist
-	})
-
 	mid := inner / 2
+	selectDistIndex(tmp[:inner], mid)
 	t.nodes[nodeIdx].mu = float32(math.Sqrt(float64(tmp[mid].dist)))
 
-	// Reorder t.idx[lo+1:hi] according to the sorted permutation.
 	for i := 0; i < inner; i++ {
 		t.idx[lo+1+i] = tmp[i].idx
 	}
@@ -160,88 +125,208 @@ func (t *VPTree) buildNode(lo, hi int, tmp []distIndex) int32 {
 	return nodeIdx
 }
 
-type candidate struct {
-	dist  float32
-	fraud bool
-}
-
-type maxHeap []candidate
-
-func (h maxHeap) Len() int            { return len(h) }
-func (h maxHeap) Less(i, j int) bool  { return h[i].dist > h[j].dist }
-func (h maxHeap) Swap(i, j int)       { h[i], h[j] = h[j], h[i] }
-func (h *maxHeap) Push(x interface{}) { *h = append(*h, x.(candidate)) }
-func (h *maxHeap) Pop() interface{} {
-	old := *h
-	n := len(old)
-	x := old[n-1]
-	*h = old[:n-1]
-	return x
-}
-
-// KNNFraudCount returns the number of fraud labels among the k nearest neighbors.
 func (t *VPTree) KNNFraudCount(query [dims]float32, k int) int {
-	hp := heapPool.Get().(*maxHeap)
-	*hp = (*hp)[:0]
-	t.searchNode(t.root, query, k, hp)
-	count := 0
-	for _, c := range *hp {
-		if c.fraud {
-			count++
-		}
-	}
-	heapPool.Put(hp)
-	return count
+	q := quantizeQuery(query)
+	state := newKNNState(k)
+	t.searchNode(t.root, q, &state)
+	return state.fraudCount()
 }
 
-func (t *VPTree) searchNode(nodeIdx int32, query [dims]float32, k int, h *maxHeap) {
+func (t *VPTree) searchNode(nodeIdx int32, query [dims]uint16, state *knnState) {
 	if nodeIdx < 0 {
 		return
 	}
 	node := t.nodes[nodeIdx]
 
-	if node.left < 0 { // leaf
+	if node.left < 0 {
 		for i := node.lo; i < node.hi; i++ {
 			p := t.points[t.idx[i]]
-			d := distQF(p.Vec, query)
-			t.tryInsert(h, k, d, p.Fraud)
+			state.add(sqDistQQ(p.Vec, query), p.Fraud)
 		}
 		return
 	}
 
 	vp := t.points[t.idx[node.lo]]
-	d := distQF(vp.Vec, query)
-	t.tryInsert(h, k, d, vp.Fraud)
+	d2 := sqDistQQ(vp.Vec, query)
+	d := float32(math.Sqrt(float64(d2)))
+	state.add(d2, vp.Fraud)
 
-	tau := float32(math.MaxFloat32)
-	if h.Len() == k {
-		tau = (*h)[0].dist
-	}
+	tau := state.tau()
 
 	if d < node.mu {
-		t.searchNode(node.left, query, k, h)
-		if h.Len() == k {
-			tau = (*h)[0].dist
-		}
+		t.searchNode(node.left, query, state)
+		tau = state.tau()
 		if node.mu-d <= tau {
-			t.searchNode(node.right, query, k, h)
+			t.searchNode(node.right, query, state)
 		}
 	} else {
-		t.searchNode(node.right, query, k, h)
-		if h.Len() == k {
-			tau = (*h)[0].dist
-		}
+		t.searchNode(node.right, query, state)
+		tau = state.tau()
 		if d-node.mu <= tau {
-			t.searchNode(node.left, query, k, h)
+			t.searchNode(node.left, query, state)
 		}
 	}
 }
 
-func (t *VPTree) tryInsert(h *maxHeap, k int, d float32, fraud bool) {
-	if h.Len() < k {
-		heap.Push(h, candidate{d, fraud})
-	} else if d < (*h)[0].dist {
-		(*h)[0] = candidate{d, fraud}
-		heap.Fix(h, 0)
+type knnState struct {
+	k     int
+	len   int
+	worst int
+	dist  [5]float32
+	fraud [5]bool
+}
+
+func newKNNState(k int) knnState {
+	if k > 5 {
+		k = 5
 	}
+	return knnState{k: k}
+}
+
+func (s *knnState) add(d float32, fraud bool) {
+	if s.len < s.k {
+		s.dist[s.len] = d
+		s.fraud[s.len] = fraud
+		if d > s.dist[s.worst] {
+			s.worst = s.len
+		}
+		s.len++
+		return
+	}
+	if d >= s.dist[s.worst] {
+		return
+	}
+	s.dist[s.worst] = d
+	s.fraud[s.worst] = fraud
+	for i := 0; i < s.k; i++ {
+		if s.dist[i] > s.dist[s.worst] {
+			s.worst = i
+		}
+	}
+}
+
+func (s *knnState) tau() float32 {
+	if s.len < s.k {
+		return float32(math.MaxFloat32)
+	}
+	return float32(math.Sqrt(float64(s.dist[s.worst])))
+}
+
+func (s *knnState) fraudCount() int {
+	count := 0
+	for i := 0; i < s.len; i++ {
+		if s.fraud[i] {
+			count++
+		}
+	}
+	return count
+}
+
+func selectDistIndex(a []distIndex, k int) {
+	left, right := 0, len(a)-1
+	for left < right {
+		pivot := partitionDistIndex(a, left, right)
+		if k == pivot {
+			return
+		}
+		if k < pivot {
+			right = pivot - 1
+		} else {
+			left = pivot + 1
+		}
+	}
+}
+
+func partitionDistIndex(a []distIndex, left, right int) int {
+	mid := left + (right-left)/2
+	pivotIdx := medianDistIndex(a, left, mid, right)
+	a[pivotIdx], a[right] = a[right], a[pivotIdx]
+	pivot := a[right].dist
+
+	store := left
+	for i := left; i < right; i++ {
+		if a[i].dist < pivot {
+			a[store], a[i] = a[i], a[store]
+			store++
+		}
+	}
+	a[store], a[right] = a[right], a[store]
+	return store
+}
+
+func medianDistIndex(a []distIndex, i, j, k int) int {
+	x, y, z := a[i].dist, a[j].dist, a[k].dist
+	if x < y {
+		if y < z {
+			return j
+		}
+		if x < z {
+			return k
+		}
+		return i
+	}
+	if x < z {
+		return i
+	}
+	if y < z {
+		return k
+	}
+	return j
+}
+
+func bruteKNNFraudCount(points []Point, query [dims]float32, k int) int {
+	if k <= 0 {
+		return 0
+	}
+
+	q := quantizeQuery(query)
+	distances := [5]float32{}
+	frauds := [5]bool{}
+	if k > len(distances) {
+		k = len(distances)
+	}
+	for i := 0; i < k && i < len(distances); i++ {
+		distances[i] = float32(math.MaxFloat32)
+	}
+
+	found := 0
+	worst := 0
+	for _, p := range points {
+		d := sqDistQQ(p.Vec, q)
+		if found < k {
+			distances[found] = d
+			frauds[found] = p.Fraud
+			if d > distances[worst] {
+				worst = found
+			}
+			found++
+			continue
+		}
+		if d >= distances[worst] {
+			continue
+		}
+		distances[worst] = d
+		frauds[worst] = p.Fraud
+		for i := 0; i < k; i++ {
+			if distances[i] > distances[worst] {
+				worst = i
+			}
+		}
+	}
+
+	count := 0
+	for i := 0; i < found; i++ {
+		if frauds[i] {
+			count++
+		}
+	}
+	return count
+}
+
+func quantizeQuery(query [dims]float32) [dims]uint16 {
+	var q [dims]uint16
+	for i, v := range query {
+		q[i] = quantize(float64(v))
+	}
+	return q
 }

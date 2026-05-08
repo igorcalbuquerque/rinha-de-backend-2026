@@ -53,6 +53,7 @@ type server struct {
 	mu      sync.RWMutex
 	ready   bool
 	tree    *VPTree
+	points  []Point
 	mccRisk map[string]float64
 	norms   Normalization
 }
@@ -87,18 +88,27 @@ func (s *server) fraudScoreHandler(w http.ResponseWriter, r *http.Request) {
 
 	s.mu.RLock()
 	tree := s.tree
+	points := s.points
 	mccRisk := s.mccRisk
 	norms := s.norms
 	ready := s.ready
 	s.mu.RUnlock()
 
-	if !ready || tree == nil {
+	if !ready {
 		json.NewEncoder(w).Encode(resp)
 		return
 	}
 
 	vec := normalize(&req, mccRisk, norms)
-	fraudCount := tree.KNNFraudCount(vec, 5)
+	fraudCount := 0
+	if tree != nil {
+		fraudCount = tree.KNNFraudCount(vec, 5)
+	} else if len(points) > 0 {
+		fraudCount = bruteKNNFraudCount(points, vec, 5)
+	} else {
+		json.NewEncoder(w).Encode(resp)
+		return
+	}
 
 	score := float64(fraudCount) / 5.0
 	resp.FraudScore = score

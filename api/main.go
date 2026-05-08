@@ -12,7 +12,7 @@ import (
 )
 
 func main() {
-	runtime.GOMAXPROCS(2)
+	runtime.GOMAXPROCS(1)
 
 	resourcesPath := os.Getenv("RESOURCES_PATH")
 	if resourcesPath == "" {
@@ -45,7 +45,7 @@ func main() {
 		srv.norms = norms
 		srv.mu.Unlock()
 
-		log.Println("metadata loaded, building VP-Tree...")
+		log.Println("metadata loaded, loading references...")
 
 		points, err := loadReferences(resourcesPath + "/references.json.gz")
 		if err != nil {
@@ -53,12 +53,17 @@ func main() {
 			return
 		}
 
+		srv.mu.Lock()
+		srv.points = points
+		srv.ready = true
+		srv.mu.Unlock()
+		log.Printf("ready: %d reference vectors loaded, building VP-Tree...", len(points))
+
 		tree := BuildVPTree(points)
 		n := len(tree.points)
 
 		srv.mu.Lock()
 		srv.tree = tree
-		srv.ready = true
 		srv.mu.Unlock()
 
 		log.Printf("ready: %d reference vectors loaded", n)

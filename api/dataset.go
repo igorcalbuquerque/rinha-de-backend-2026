@@ -50,7 +50,6 @@ func loadReferences(path string) ([]Point, error) {
 
 	dec := json.NewDecoder(gz)
 
-	// Read opening bracket.
 	tok, err := dec.Token()
 	if err != nil {
 		return nil, err
