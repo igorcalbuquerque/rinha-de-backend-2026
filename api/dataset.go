@@ -82,14 +82,9 @@ func loadReferences(path string) ([]Point, error) {
 }
 
 func loadAll(resourcesPath string) (*VPTree, map[string]float64, Normalization, error) {
-	mccRisk, err := loadMCCRisk(filepath.Join(resourcesPath, "mcc_risk.json"))
+	mccRisk, norms, err := loadMetadata(resourcesPath)
 	if err != nil {
-		return nil, nil, Normalization{}, fmt.Errorf("mcc_risk: %w", err)
-	}
-
-	norms, err := loadNormalization(filepath.Join(resourcesPath, "normalization.json"))
-	if err != nil {
-		return nil, nil, Normalization{}, fmt.Errorf("normalization: %w", err)
+		return nil, nil, Normalization{}, err
 	}
 
 	points, err := loadReferences(filepath.Join(resourcesPath, "references.json.gz"))
@@ -100,4 +95,18 @@ func loadAll(resourcesPath string) (*VPTree, map[string]float64, Normalization, 
 	tree := BuildVPTree(points)
 	debug.FreeOSMemory()
 	return tree, mccRisk, norms, nil
+}
+
+func loadMetadata(resourcesPath string) (map[string]float64, Normalization, error) {
+	mccRisk, err := loadMCCRisk(filepath.Join(resourcesPath, "mcc_risk.json"))
+	if err != nil {
+		return nil, Normalization{}, fmt.Errorf("mcc_risk: %w", err)
+	}
+
+	norms, err := loadNormalization(filepath.Join(resourcesPath, "normalization.json"))
+	if err != nil {
+		return nil, Normalization{}, fmt.Errorf("normalization: %w", err)
+	}
+
+	return mccRisk, norms, nil
 }

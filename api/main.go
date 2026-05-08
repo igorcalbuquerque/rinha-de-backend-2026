@@ -30,17 +30,30 @@ func main() {
 	}
 
 	go func() {
-		log.Println("loading dataset and building VP-Tree...")
-		tree, mccRisk, norms, err := loadAll(resourcesPath)
+		log.Println("loading metadata...")
+		mccRisk, norms, err := loadMetadata(resourcesPath)
 		if err != nil {
 			log.Printf("startup failed: %v", err)
 			return
 		}
+
 		srv.mu.Lock()
-		srv.tree = tree
 		srv.mccRisk = mccRisk
 		srv.norms = norms
 		srv.ready = true
+		srv.mu.Unlock()
+
+		log.Println("ready: metadata loaded, building VP-Tree...")
+
+		points, err := loadReferences(resourcesPath + "/references.json.gz")
+		if err != nil {
+			log.Printf("references failed: %v", err)
+			return
+		}
+
+		tree := BuildVPTree(points)
+		srv.mu.Lock()
+		srv.tree = tree
 		srv.mu.Unlock()
 		log.Printf("ready: %d reference vectors loaded", len(tree.points))
 	}()
