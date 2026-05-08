@@ -54,13 +54,12 @@ func normalize(req *FraudRequest, mccRisk map[string]float64, norms Normalizatio
 		kmFromLast = normDiv(last.KmFromCurrent, norms.MaxKm)
 	}
 
-	knownSet := make(map[string]struct{}, len(cust.KnownMerchants))
+	unknownMerchant := 1.0
 	for _, m := range cust.KnownMerchants {
-		knownSet[m] = struct{}{}
-	}
-	var unknownMerchant float64
-	if _, ok := knownSet[merch.ID]; !ok {
-		unknownMerchant = 1
+		if m == merch.ID {
+			unknownMerchant = 0
+			break
+		}
 	}
 
 	mcc, ok := mccRisk[merch.MCC]

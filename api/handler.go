@@ -98,21 +98,9 @@ func (s *server) fraudScoreHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	vec := normalize(&req, mccRisk, norms)
-	neighbors := tree.KNN(vec, 5)
+	fraudCount := tree.KNNFraudCount(vec, 5)
 
-	if len(neighbors) == 0 {
-		json.NewEncoder(w).Encode(resp)
-		return
-	}
-
-	var fraudCount int
-	for _, f := range neighbors {
-		if f {
-			fraudCount++
-		}
-	}
-
-	score := float64(fraudCount) / float64(len(neighbors))
+	score := float64(fraudCount) / 5.0
 	resp.FraudScore = score
 	resp.Approved = score < 0.6
 

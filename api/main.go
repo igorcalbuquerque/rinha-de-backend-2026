@@ -6,11 +6,14 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"runtime"
 	"syscall"
 	"time"
 )
 
 func main() {
+	runtime.GOMAXPROCS(2)
+
 	resourcesPath := os.Getenv("RESOURCES_PATH")
 	if resourcesPath == "" {
 		resourcesPath = "/resources"
@@ -40,10 +43,9 @@ func main() {
 		srv.mu.Lock()
 		srv.mccRisk = mccRisk
 		srv.norms = norms
-		srv.ready = true
 		srv.mu.Unlock()
 
-		log.Println("ready: metadata loaded, building VP-Tree...")
+		log.Println("metadata loaded, building VP-Tree...")
 
 		points, err := loadReferences(resourcesPath + "/references.json.gz")
 		if err != nil {
@@ -52,10 +54,14 @@ func main() {
 		}
 
 		tree := BuildVPTree(points)
+		n := len(tree.points)
+
 		srv.mu.Lock()
 		srv.tree = tree
+		srv.ready = true
 		srv.mu.Unlock()
-		log.Printf("ready: %d reference vectors loaded", len(tree.points))
+
+		log.Printf("ready: %d reference vectors loaded", n)
 	}()
 
 	go func() {

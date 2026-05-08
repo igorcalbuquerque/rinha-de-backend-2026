@@ -5,6 +5,7 @@ import (
 	"math"
 	"math/rand"
 	"sort"
+	"sync"
 )
 
 const (
@@ -28,11 +29,20 @@ func quantize(v float64) uint16 {
 	return uint16(q)
 }
 
+const dequantScale = float32(1.0 / 65534.0)
+
 func dequantize(q uint16) float32 {
 	if q == 0 {
 		return -1.0
 	}
-	return float32(q-1) / 65534.0
+	return float32(q-1) * dequantScale
+}
+
+var heapPool = sync.Pool{
+	New: func() interface{} {
+		h := make(maxHeap, 0, 6)
+		return &h
+	},
 }
 
 // sqDistQQ returns the squared Euclidean distance between two quantized vectors.
@@ -169,15 +179,19 @@ func (h *maxHeap) Pop() interface{} {
 	return x
 }
 
-func (t *VPTree) KNN(query [dims]float32, k int) []bool {
-	h := make(maxHeap, 0, k+1)
-	heap.Init(&h)
-	t.searchNode(t.root, query, k, &h)
-	out := make([]bool, h.Len())
-	for i := range out {
-		out[i] = h[i].fraud
+// KNNFraudCount returns the number of fraud labels among the k nearest neighbors.
+func (t *VPTree) KNNFraudCount(query [dims]float32, k int) int {
+	hp := heapPool.Get().(*maxHeap)
+	*hp = (*hp)[:0]
+	t.searchNode(t.root, query, k, hp)
+	count := 0
+	for _, c := range *hp {
+		if c.fraud {
+			count++
+		}
 	}
-	return out
+	heapPool.Put(hp)
+	return count
 }
 
 func (t *VPTree) searchNode(nodeIdx int32, query [dims]float32, k int, h *maxHeap) {
