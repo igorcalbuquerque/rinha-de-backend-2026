@@ -9,7 +9,7 @@ services:
     depends_on:
       - api1
       - api2
-    mem_limit: 10m
+    mem_limit: 20m
     cpus: 0.1
     networks:
       - backend
@@ -19,11 +19,11 @@ services:
     platform: linux/amd64
     environment:
       - RESOURCES_PATH=/resources
-      - GOMEMLIMIT=145MiB
-      - GOGC=50
+      - GOMEMLIMIT=125MiB
+      - GOGC=40
     volumes:
       - ../resources:/resources:ro
-    mem_limit: 170m
+    mem_limit: 165m
     cpus: 0.45
     networks:
       - backend
@@ -33,11 +33,11 @@ services:
     platform: linux/amd64
     environment:
       - RESOURCES_PATH=/resources
-      - GOMEMLIMIT=145MiB
-      - GOGC=50
+      - GOMEMLIMIT=125MiB
+      - GOGC=40
     volumes:
       - ../resources:/resources:ro
-    mem_limit: 170m
+    mem_limit: 165m
     cpus: 0.45
     networks:
       - backend
