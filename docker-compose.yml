@@ -1,47 +1,57 @@
 services:
   nginx:
-    image: nginx:1.25-alpine
+    image: nginx:1.27-alpine
     platform: linux/amd64
     ports:
       - "9999:9999"
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - uds-vol:/run/uds
     depends_on:
       - api1
       - api2
-    mem_limit: 20m
-    cpus: 0.1
+    mem_limit: 50m
+    cpus: 0.3
     networks:
       - backend
 
   api1:
-    image: icalbuquerque/rinha-de-backend-2026-api:latest
+    image: icalbuquerque/rinha-de-backend-2026-api:uds-20260509
+    pull_policy: always
     platform: linux/amd64
     environment:
       - RESOURCES_PATH=/resources
-      - GOMEMLIMIT=125MiB
+      - API_SOCKET=/run/uds/api1.sock
+      - GOMEMLIMIT=115MiB
       - GOGC=40
     volumes:
       - ../resources:/resources:ro
-    mem_limit: 165m
-    cpus: 0.45
+      - uds-vol:/run/uds
+    mem_limit: 150m
+    cpus: 0.35
     networks:
       - backend
 
   api2:
-    image: icalbuquerque/rinha-de-backend-2026-api:latest
+    image: icalbuquerque/rinha-de-backend-2026-api:uds-20260509
+    pull_policy: always
     platform: linux/amd64
     environment:
       - RESOURCES_PATH=/resources
-      - GOMEMLIMIT=125MiB
+      - API_SOCKET=/run/uds/api2.sock
+      - GOMEMLIMIT=115MiB
       - GOGC=40
     volumes:
       - ../resources:/resources:ro
-    mem_limit: 165m
-    cpus: 0.45
+      - uds-vol:/run/uds
+    mem_limit: 150m
+    cpus: 0.35
     networks:
       - backend
 
 networks:
   backend:
     driver: bridge
+
+volumes:
+  uds-vol:
