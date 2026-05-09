@@ -43,9 +43,10 @@ func main() {
 		srv.mu.Lock()
 		srv.mccRisk = mccRisk
 		srv.norms = norms
+		srv.ready = true
 		srv.mu.Unlock()
 
-		log.Println("metadata loaded, loading references...")
+		log.Println("ready: metadata loaded, loading references...")
 
 		points, err := loadReferences(resourcesPath + "/references.json.gz")
 		if err != nil {
@@ -55,7 +56,6 @@ func main() {
 
 		srv.mu.Lock()
 		srv.points = points
-		srv.ready = true
 		srv.mu.Unlock()
 		log.Printf("ready: %d reference vectors loaded, building VP-Tree...", len(points))
 
