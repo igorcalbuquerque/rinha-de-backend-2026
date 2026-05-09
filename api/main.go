@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -73,7 +74,7 @@ func main() {
 	}()
 
 	go func() {
-		if err := httpSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		if err := serveHTTP(httpSrv); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("listen: %v", err)
 		}
 	}()
@@ -85,4 +86,26 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	httpSrv.Shutdown(ctx)
+}
+
+func serveHTTP(httpSrv *http.Server) error {
+	socketPath := os.Getenv("API_SOCKET")
+	if socketPath == "" {
+		return httpSrv.ListenAndServe()
+	}
+
+	if err := os.RemoveAll(socketPath); err != nil {
+		return err
+	}
+
+	ln, err := net.Listen("unix", socketPath)
+	if err != nil {
+		return err
+	}
+	if err := os.Chmod(socketPath, 0o777); err != nil {
+		ln.Close()
+		return err
+	}
+
+	return httpSrv.Serve(ln)
 }
