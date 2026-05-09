@@ -15,30 +15,26 @@ services:
       - backend
 
   api1:
-    image: icalbuquerque/rinha-de-backend-2026-api:healthcheck-20260509
+    image: icalbuquerque/rinha-de-backend-2026-api:embedded-20260509
     pull_policy: always
     platform: linux/amd64
     environment:
       - RESOURCES_PATH=/resources
       - GOMEMLIMIT=115MiB
       - GOGC=40
-    volumes:
-      - ../resources:/resources:ro
     mem_limit: 150m
     cpus: 0.35
     networks:
       - backend
 
   api2:
-    image: icalbuquerque/rinha-de-backend-2026-api:healthcheck-20260509
+    image: icalbuquerque/rinha-de-backend-2026-api:embedded-20260509
     pull_policy: always
     platform: linux/amd64
     environment:
       - RESOURCES_PATH=/resources
       - GOMEMLIMIT=115MiB
       - GOGC=40
-    volumes:
-      - ../resources:/resources:ro
     mem_limit: 150m
     cpus: 0.35
     networks:
