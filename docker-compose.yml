@@ -6,7 +6,6 @@ services:
       - "9999:9999"
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
-      - uds-vol:/run/uds
     depends_on:
       - api1
       - api2
@@ -16,29 +15,26 @@ services:
       - backend
 
   api1:
-    image: icalbuquerque/rinha-de-backend-2026-api:uds-20260509
+    image: icalbuquerque/rinha-de-backend-2026-api:healthcheck-20260509
     pull_policy: always
     platform: linux/amd64
     environment:
       - RESOURCES_PATH=/resources
-      - API_SOCKET=/run/uds/api1.sock
       - GOMEMLIMIT=115MiB
       - GOGC=40
     volumes:
       - ../resources:/resources:ro
-      - uds-vol:/run/uds
     mem_limit: 150m
     cpus: 0.35
     networks:
       - backend
 
   api2:
-    image: icalbuquerque/rinha-de-backend-2026-api:uds-20260509
+    image: icalbuquerque/rinha-de-backend-2026-api:healthcheck-20260509
     pull_policy: always
     platform: linux/amd64
     environment:
       - RESOURCES_PATH=/resources
-      - API_SOCKET=/run/uds/api2.sock
       - GOMEMLIMIT=115MiB
       - GOGC=40
     volumes:
@@ -52,6 +48,3 @@ services:
 networks:
   backend:
     driver: bridge
-
-volumes:
-  uds-vol:
