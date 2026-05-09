@@ -39,7 +39,6 @@ services:
       - GOGC=40
     volumes:
       - ../resources:/resources:ro
-      - uds-vol:/run/uds
     mem_limit: 150m
     cpus: 0.35
     networks:
