@@ -20,6 +20,9 @@ func main() {
 	}
 
 	srv := &server{}
+	srv.mccRisk = defaultMCCRisk()
+	srv.norms = defaultNormalization()
+	srv.ready = true
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/ready", srv.readyHandler)
