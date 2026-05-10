@@ -1,8 +1,6 @@
-version: '2.4'
-
 services:
   nginx:
-    image: nginx:1.25-alpine
+    image: nginx:1.27-alpine
     platform: linux/amd64
     ports:
       - "9999:9999"
@@ -17,24 +15,26 @@ services:
       - backend
 
   api1:
-    image: icalbuquerque/rinha-de-backend-2026-api:latest
+    image: icalbuquerque/rinha-de-backend-2026-api:ready-20260510
+    pull_policy: always
     platform: linux/amd64
     environment:
       - RESOURCES_PATH=/resources
-    volumes:
-      - ./resources:/resources:ro
+      - GOMEMLIMIT=145MiB
+      - GOGC=50
     mem_limit: 165m
     cpus: 0.45
     networks:
       - backend
 
   api2:
-    image: icalbuquerque/rinha-de-backend-2026-api:latest
+    image: icalbuquerque/rinha-de-backend-2026-api:ready-20260510
+    pull_policy: always
     platform: linux/amd64
     environment:
       - RESOURCES_PATH=/resources
-    volumes:
-      - ./resources:/resources:ro
+      - GOMEMLIMIT=145MiB
+      - GOGC=50
     mem_limit: 165m
     cpus: 0.45
     networks:

@@ -23,7 +23,6 @@ func main() {
 	srv := &server{}
 	srv.mccRisk = defaultMCCRisk()
 	srv.norms = defaultNormalization()
-	srv.ready = true
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/ready", srv.readyHandler)
@@ -37,39 +36,21 @@ func main() {
 	}
 
 	go func() {
-		log.Println("loading metadata...")
-		mccRisk, norms, err := loadMetadata(resourcesPath)
+		log.Println("loading dataset and building VP-Tree...")
+		tree, mccRisk, norms, err := loadAll(resourcesPath)
 		if err != nil {
 			log.Printf("startup failed: %v", err)
 			return
 		}
 
 		srv.mu.Lock()
+		srv.tree = tree
 		srv.mccRisk = mccRisk
 		srv.norms = norms
 		srv.ready = true
 		srv.mu.Unlock()
 
-		log.Println("ready: metadata loaded, loading references...")
-
-		points, err := loadReferences(resourcesPath + "/references.json.gz")
-		if err != nil {
-			log.Printf("references failed: %v", err)
-			return
-		}
-
-		srv.mu.Lock()
-		srv.points = points
-		srv.mu.Unlock()
-		log.Printf("ready: %d reference vectors loaded, building VP-Tree...", len(points))
-
-		tree := BuildVPTree(points)
 		n := len(tree.points)
-
-		srv.mu.Lock()
-		srv.tree = tree
-		srv.mu.Unlock()
-
 		log.Printf("ready: %d reference vectors loaded", n)
 	}()
 
