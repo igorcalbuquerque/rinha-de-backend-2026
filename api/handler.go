@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"sync"
 )
@@ -44,9 +45,21 @@ type FraudRequest struct {
 	LastTransaction *LastTransaction `json:"last_transaction"`
 }
 
-type FraudResponse struct {
-	Approved   bool    `json:"approved"`
-	FraudScore float64 `json:"fraud_score"`
+func writeFraudResponse(w http.ResponseWriter, fraudCount int) {
+	switch fraudCount {
+	case 0:
+		io.WriteString(w, `{"approved":true,"fraud_score":0}`)
+	case 1:
+		io.WriteString(w, `{"approved":true,"fraud_score":0.2}`)
+	case 2:
+		io.WriteString(w, `{"approved":true,"fraud_score":0.4}`)
+	case 3:
+		io.WriteString(w, `{"approved":false,"fraud_score":0.6}`)
+	case 4:
+		io.WriteString(w, `{"approved":false,"fraud_score":0.8}`)
+	default:
+		io.WriteString(w, `{"approved":false,"fraud_score":1}`)
+	}
 }
 
 type server struct {
@@ -72,16 +85,15 @@ func (s *server) readyHandler(w http.ResponseWriter, r *http.Request) {
 func (s *server) fraudScoreHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	resp := FraudResponse{Approved: true, FraudScore: 0.0}
 	defer func() {
 		if rec := recover(); rec != nil {
-			json.NewEncoder(w).Encode(resp)
+			writeFraudResponse(w, 0)
 		}
 	}()
 
 	var req FraudRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		json.NewEncoder(w).Encode(resp)
+		writeFraudResponse(w, 0)
 		return
 	}
 
@@ -93,15 +105,12 @@ func (s *server) fraudScoreHandler(w http.ResponseWriter, r *http.Request) {
 	s.mu.RUnlock()
 
 	if !ready || tree == nil {
-		json.NewEncoder(w).Encode(resp)
+		writeFraudResponse(w, 0)
 		return
 	}
 
 	vec := normalize(&req, mccRisk, norms)
 	fraudCount := tree.KNNFraudCount(vec, 5)
-	score := float64(fraudCount) / 5.0
-	resp.FraudScore = score
-	resp.Approved = score < 0.6
 
-	json.NewEncoder(w).Encode(resp)
+	writeFraudResponse(w, fraudCount)
 }

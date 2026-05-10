@@ -7,7 +7,8 @@ import (
 const (
 	dims            = 14
 	leafSize        = 32
-	maxSearchPoints = 20000
+	maxSearchPoints = 1024
+	maxSearchNodes  = 2048
 )
 
 func quantize(v float64) uint16 {
@@ -137,6 +138,7 @@ func (t *VPTree) searchNode(nodeIdx int32, query [dims]uint16, state *knnState) 
 	if nodeIdx < 0 || state.done() {
 		return
 	}
+	state.nodes++
 	node := t.nodes[nodeIdx]
 
 	if node.left < 0 {
@@ -185,6 +187,7 @@ type knnState struct {
 	len     int
 	worst   int
 	visited int
+	nodes   int
 	dist    [5]float32
 	fraud   [5]bool
 }
@@ -236,7 +239,7 @@ func (s *knnState) fraudCount() int {
 }
 
 func (s *knnState) done() bool {
-	return s.visited >= maxSearchPoints && s.len >= s.k
+	return s.len >= s.k && (s.visited >= maxSearchPoints || s.nodes >= maxSearchNodes)
 }
 
 func selectDistIndex(a []distIndex, k int) {
