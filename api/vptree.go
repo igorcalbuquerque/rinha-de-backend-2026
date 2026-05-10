@@ -5,8 +5,9 @@ import (
 )
 
 const (
-	dims     = 14
-	leafSize = 32
+	dims            = 14
+	leafSize        = 32
+	maxSearchPoints = 20000
 )
 
 func quantize(v float64) uint16 {
@@ -133,14 +134,18 @@ func (t *VPTree) KNNFraudCount(query [dims]float32, k int) int {
 }
 
 func (t *VPTree) searchNode(nodeIdx int32, query [dims]uint16, state *knnState) {
-	if nodeIdx < 0 {
+	if nodeIdx < 0 || state.done() {
 		return
 	}
 	node := t.nodes[nodeIdx]
 
 	if node.left < 0 {
 		for i := node.lo; i < node.hi; i++ {
+			if state.done() {
+				return
+			}
 			p := t.points[t.idx[i]]
+			state.visited++
 			state.add(sqDistQQ(p.Vec, query), p.Fraud)
 		}
 		return
@@ -149,18 +154,25 @@ func (t *VPTree) searchNode(nodeIdx int32, query [dims]uint16, state *knnState) 
 	vp := t.points[t.idx[node.lo]]
 	d2 := sqDistQQ(vp.Vec, query)
 	d := float32(math.Sqrt(float64(d2)))
+	state.visited++
 	state.add(d2, vp.Fraud)
 
 	tau := state.tau()
 
 	if d < node.mu {
 		t.searchNode(node.left, query, state)
+		if state.done() {
+			return
+		}
 		tau = state.tau()
 		if node.mu-d <= tau {
 			t.searchNode(node.right, query, state)
 		}
 	} else {
 		t.searchNode(node.right, query, state)
+		if state.done() {
+			return
+		}
 		tau = state.tau()
 		if d-node.mu <= tau {
 			t.searchNode(node.left, query, state)
@@ -169,11 +181,12 @@ func (t *VPTree) searchNode(nodeIdx int32, query [dims]uint16, state *knnState) 
 }
 
 type knnState struct {
-	k     int
-	len   int
-	worst int
-	dist  [5]float32
-	fraud [5]bool
+	k       int
+	len     int
+	worst   int
+	visited int
+	dist    [5]float32
+	fraud   [5]bool
 }
 
 func newKNNState(k int) knnState {
@@ -220,6 +233,10 @@ func (s *knnState) fraudCount() int {
 		}
 	}
 	return count
+}
+
+func (s *knnState) done() bool {
+	return s.visited >= maxSearchPoints && s.len >= s.k
 }
 
 func selectDistIndex(a []distIndex, k int) {
