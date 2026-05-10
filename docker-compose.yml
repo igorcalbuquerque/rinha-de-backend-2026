@@ -9,34 +9,34 @@ services:
     depends_on:
       - api1
       - api2
-    mem_limit: 20m
-    cpus: 0.1
+    mem_limit: 40m
+    cpus: 0.3
     networks:
       - backend
 
   api1:
-    image: icalbuquerque/rinha-de-backend-2026-api:classify-20260510
+    image: icalbuquerque/rinha-de-backend-2026-api:hot-20260510
     pull_policy: always
     platform: linux/amd64
     environment:
       - RESOURCES_PATH=/resources
-      - GOMEMLIMIT=145MiB
+      - GOMEMLIMIT=125MiB
       - GOGC=50
-    mem_limit: 165m
-    cpus: 0.45
+    mem_limit: 155m
+    cpus: 0.35
     networks:
       - backend
 
   api2:
-    image: icalbuquerque/rinha-de-backend-2026-api:classify-20260510
+    image: icalbuquerque/rinha-de-backend-2026-api:hot-20260510
     pull_policy: always
     platform: linux/amd64
     environment:
       - RESOURCES_PATH=/resources
-      - GOMEMLIMIT=145MiB
+      - GOMEMLIMIT=125MiB
       - GOGC=50
-    mem_limit: 165m
-    cpus: 0.45
+    mem_limit: 155m
+    cpus: 0.35
     networks:
       - backend
 
