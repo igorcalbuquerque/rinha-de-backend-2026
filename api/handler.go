@@ -2,8 +2,8 @@ package main
 
 import (
 	"encoding/json"
-	"io"
 	"net/http"
+	"strconv"
 	"sync"
 )
 
@@ -45,29 +45,24 @@ type FraudRequest struct {
 	LastTransaction *LastTransaction `json:"last_transaction"`
 }
 
-func writeFraudResponse(w http.ResponseWriter, fraudCount int) {
-	switch fraudCount {
-	case 0:
-		io.WriteString(w, `{"approved":true,"fraud_score":0}`)
-	case 1:
-		io.WriteString(w, `{"approved":true,"fraud_score":0.2}`)
-	case 2:
-		io.WriteString(w, `{"approved":true,"fraud_score":0.4}`)
-	case 3:
-		io.WriteString(w, `{"approved":false,"fraud_score":0.6}`)
-	case 4:
-		io.WriteString(w, `{"approved":false,"fraud_score":0.8}`)
-	default:
-		io.WriteString(w, `{"approved":false,"fraud_score":1}`)
+func writeScoreResponse(w http.ResponseWriter, score float64) {
+	buf := make([]byte, 0, 48)
+	if score < 0.6 {
+		buf = append(buf, `{"approved":true,"fraud_score":`...)
+	} else {
+		buf = append(buf, `{"approved":false,"fraud_score":`...)
 	}
+	buf = strconv.AppendFloat(buf, score, 'f', 4, 64)
+	buf = append(buf, '}')
+	w.Write(buf)
 }
 
 type server struct {
-	mu      sync.RWMutex
-	ready   bool
-	tree    *VPTree
-	mccRisk map[string]float64
-	norms   Normalization
+	mu         sync.RWMutex
+	ready      bool
+	classifier *Classifier
+	mccRisk    map[string]float64
+	norms      Normalization
 }
 
 func (s *server) readyHandler(w http.ResponseWriter, r *http.Request) {
@@ -87,30 +82,28 @@ func (s *server) fraudScoreHandler(w http.ResponseWriter, r *http.Request) {
 
 	defer func() {
 		if rec := recover(); rec != nil {
-			writeFraudResponse(w, 0)
+			writeScoreResponse(w, 0)
 		}
 	}()
 
 	var req FraudRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeFraudResponse(w, 0)
+		writeScoreResponse(w, 0)
 		return
 	}
 
 	s.mu.RLock()
-	tree := s.tree
+	classifier := s.classifier
 	mccRisk := s.mccRisk
 	norms := s.norms
 	ready := s.ready
 	s.mu.RUnlock()
 
-	if !ready || tree == nil {
-		writeFraudResponse(w, 0)
+	if !ready || classifier == nil {
+		writeScoreResponse(w, 0)
 		return
 	}
 
 	vec := normalize(&req, mccRisk, norms)
-	fraudCount := tree.KNNFraudCount(vec, 5)
-
-	writeFraudResponse(w, fraudCount)
+	writeScoreResponse(w, classifier.Score(vec))
 }

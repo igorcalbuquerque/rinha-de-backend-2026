@@ -80,20 +80,19 @@ func loadReferences(path string) ([]Point, error) {
 	return points, nil
 }
 
-func loadAll(resourcesPath string) (*VPTree, map[string]float64, Normalization, error) {
+func loadAll(resourcesPath string) (*Classifier, map[string]float64, Normalization, error) {
 	mccRisk, norms, err := loadMetadata(resourcesPath)
 	if err != nil {
 		return nil, nil, Normalization{}, err
 	}
 
-	points, err := loadReferences(filepath.Join(resourcesPath, "references.json.gz"))
+	classifier, err := loadClassifier(filepath.Join(resourcesPath, "references.json.gz"))
 	if err != nil {
 		return nil, nil, Normalization{}, fmt.Errorf("references: %w", err)
 	}
 
-	tree := BuildVPTree(points)
 	debug.FreeOSMemory()
-	return tree, mccRisk, norms, nil
+	return classifier, mccRisk, norms, nil
 }
 
 func loadMetadata(resourcesPath string) (map[string]float64, Normalization, error) {

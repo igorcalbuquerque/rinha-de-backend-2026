@@ -36,22 +36,21 @@ func main() {
 	}
 
 	go func() {
-		log.Println("loading dataset and building VP-Tree...")
-		tree, mccRisk, norms, err := loadAll(resourcesPath)
+		log.Println("loading classifier...")
+		classifier, mccRisk, norms, err := loadAll(resourcesPath)
 		if err != nil {
 			log.Printf("startup failed: %v", err)
 			return
 		}
 
 		srv.mu.Lock()
-		srv.tree = tree
+		srv.classifier = classifier
 		srv.mccRisk = mccRisk
 		srv.norms = norms
 		srv.ready = true
 		srv.mu.Unlock()
 
-		n := len(tree.points)
-		log.Printf("ready: %d reference vectors loaded", n)
+		log.Printf("ready: %d classifier buckets loaded", len(classifier.specific))
 	}()
 
 	go func() {
