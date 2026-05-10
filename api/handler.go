@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"strconv"
 	"sync"
@@ -86,8 +87,8 @@ func (s *server) fraudScoreHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
-	var req FraudRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
 		writeScoreResponse(w, 0)
 		return
 	}
@@ -104,6 +105,14 @@ func (s *server) fraudScoreHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	vec := normalize(&req, mccRisk, norms)
+	vec, ok := normalizeBody(body, mccRisk, norms)
+	if !ok {
+		var req FraudRequest
+		if err := json.Unmarshal(body, &req); err != nil {
+			writeScoreResponse(w, 0)
+			return
+		}
+		vec = normalize(&req, mccRisk, norms)
+	}
 	writeScoreResponse(w, classifier.Score(vec))
 }
