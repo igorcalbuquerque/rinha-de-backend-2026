@@ -15,7 +15,7 @@ services:
       - backend
 
   api1:
-    image: icalbuquerque/rinha-de-backend-2026-api:hot-20260510
+    image: icalbuquerque/rinha-de-backend-2026-api:tuned-20260511
     pull_policy: always
     platform: linux/amd64
     environment:
@@ -28,7 +28,7 @@ services:
       - backend
 
   api2:
-    image: icalbuquerque/rinha-de-backend-2026-api:hot-20260510
+    image: icalbuquerque/rinha-de-backend-2026-api:tuned-20260511
     pull_policy: always
     platform: linux/amd64
     environment:
