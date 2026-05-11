@@ -19,6 +19,8 @@ type Classifier struct {
 	base     bucketStat
 }
 
+const decisionScore = 0.01
+
 func loadClassifier(path string) (*Classifier, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -76,6 +78,10 @@ func loadClassifier(path string) (*Classifier, error) {
 }
 
 func (c *Classifier) Score(query [dims]float32) float64 {
+	return calibrateScore(c.RawScore(query))
+}
+
+func (c *Classifier) RawScore(query [dims]float32) float64 {
 	q := quantizeQuery(query)
 
 	if st, ok := c.specific[specificKey(q)]; ok && st.Total >= 5 {
@@ -103,6 +109,13 @@ func statScore(st bucketStat) float64 {
 		return 0
 	}
 	return float64(st.Fraud) / float64(st.Total)
+}
+
+func calibrateScore(score float64) float64 {
+	if score < decisionScore {
+		return score * (0.59 / decisionScore)
+	}
+	return 0.6 + ((score - decisionScore) * (0.4 / (1 - decisionScore)))
 }
 
 func specificKey(q [dims]uint16) uint64 {
